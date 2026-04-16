@@ -10,12 +10,15 @@ use Spark\Database\Connection;
 use Spark\View\View;
 use Spark\Support\Logger;
 use Spark\Support\ErrorHandler;
+use Spark\Support\ServiceProvider;
 
 class Application extends Container
 {
     public readonly string $basePath;
     protected array $config = [];
     protected static ?Application $app = null;
+    /** @var ServiceProvider[] */
+    protected array $providers = [];
 
     public function __construct(string $basePath)
     {
@@ -58,6 +61,21 @@ class Application extends Container
         ));
 
         $this->ensureStorageDirs();
+    }
+
+    public function register(string $providerClass): self
+    {
+        $provider = new $providerClass($this);
+        $provider->register();
+        $this->providers[] = $provider;
+        return $this;
+    }
+
+    public function boot(): void
+    {
+        foreach ($this->providers as $provider) {
+            $provider->boot();
+        }
     }
 
     protected function loadConfig(): void

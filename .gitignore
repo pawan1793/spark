@@ -1,7 +1,7 @@
 /vendor/
 /node_modules/
 /storage/logs/*.log
-/storage/cache/views/*
+/storage/cache/views/*.php
 /storage/database.sqlite
 .env
 .DS_Store
@@ -9,3 +9,4 @@
 .vscode/
 .claude/
 PRD.md
+composer.lock

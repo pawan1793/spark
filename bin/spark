@@ -1,0 +1,28 @@
+#!/usr/bin/env php
+<?php
+
+use Spark\Application;
+use Spark\Console\Kernel;
+
+define('SPARK_START', microtime(true));
+
+// Support both: installed as a dependency (vendor/bin/spark) and
+// running directly from the project root.
+$possiblePaths = [
+    __DIR__ . '/../bootstrap/autoload.php',   // library root
+    __DIR__ . '/../../bootstrap/autoload.php', // vendor/bin/spark
+    __DIR__ . '/../../../bootstrap/autoload.php',
+];
+
+foreach ($possiblePaths as $path) {
+    if (is_file($path)) {
+        require $path;
+        break;
+    }
+}
+
+$basePath = getcwd();
+
+$app = new Application($basePath);
+$kernel = new Kernel($app);
+exit($kernel->handle($argv));

@@ -72,7 +72,11 @@ class Request
         $remote = $this->server['REMOTE_ADDR'] ?? '0.0.0.0';
         $proxies = null;
         if (function_exists('config')) {
-            $proxies = config('app.trusted_proxies');
+            try {
+                $proxies = config('app.trusted_proxies');
+            } catch (\Throwable) {
+                // App not bootstrapped — no proxy config; use REMOTE_ADDR only.
+            }
         }
         if (!is_array($proxies) || empty($proxies)) {
             return $remote;

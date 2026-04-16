@@ -1,39 +1,67 @@
 # Spark
 
-A lightweight, Laravel-inspired PHP framework. No Symfony dependencies, no heavy abstractions — just the essentials, in clean readable code.
+[![Tests](https://github.com/pawan1793/spark/actions/workflows/tests.yml/badge.svg)](https://github.com/pawan1793/spark/actions/workflows/tests.yml)
+[![Latest Version](https://img.shields.io/packagist/v/spark/framework.svg)](https://packagist.org/packages/spark/framework)
+[![PHP Version](https://img.shields.io/packagist/php-v/spark/framework.svg)](https://packagist.org/packages/spark/framework)
+[![License](https://img.shields.io/github/license/pawan1793/spark.svg)](LICENSE)
+
+A lightweight, Laravel-inspired PHP framework. No Symfony dependencies, no heavy abstractions — just routing, ORM, templating, middleware, DI, migrations, and a CLI in clean PHP 8.1+ code.
+
+---
+
+## Installation
+
+### New project (recommended)
+
+```bash
+composer create-project spark/skeleton my-app
+cd my-app
+vendor/bin/spark key:generate
+vendor/bin/spark serve
+```
+
+### Add to existing project
+
+```bash
+composer require spark/framework
+```
+
+```php
+// public/index.php
+use Spark\Application;
+
+require __DIR__ . '/../vendor/autoload.php';
+
+$app = new Application(dirname(__DIR__));
+$app->run();
+```
+
+---
 
 ## Requirements
 
 - PHP 8.1+
-- `ext-pdo`, `ext-mbstring`, `ext-json`
+- Extensions: `pdo`, `mbstring`, `json`
+- No other dependencies
 
-## Quick Start
-
-```bash
-cp .env.example .env
-php spark key:generate
-php spark migrate
-php spark serve
-```
-
-Open http://127.0.0.1:8000.
-
-No `composer install` needed — Spark ships with its own PSR-4 autoloader. Composer is supported if you prefer it.
+---
 
 ## Directory Layout
 
 ```
-app/          Your controllers, models, middleware
-bootstrap/    Framework bootstrap (autoload, app registration)
-config/       App + database config
-core/         Framework internals (Spark\*)
+app/          Controllers, models, middleware (your code)
+bootstrap/    Autoloader + app registration
+config/       app.php + database.php
 database/     Migrations
 public/       Web entry point (index.php)
 resources/    Views (.spark.php)
 routes/       web.php + api.php
-storage/      Logs + compiled views
-spark         CLI entry
+src/          Framework internals (Spark\*)
+storage/      Logs + compiled view cache
+bin/spark     CLI entry point
 ```
+
+---
 
 ## Routing
 
@@ -42,6 +70,7 @@ spark         CLI entry
 ```php
 $router->get('/', [HomeController::class, 'index']);
 $router->get('/users/{id}', [UserController::class, 'show']);
+$router->get('/posts/{slug?}', [PostController::class, 'show']); // optional param
 
 $router->post('/users', [UserController::class, 'store'])
     ->middleware(App\Middleware\Auth::class);
@@ -51,9 +80,17 @@ $router->group(['prefix' => 'admin', 'middleware' => [Auth::class]], function ($
 });
 
 $router->get('/ping', fn() => ['pong' => true]);
+
+// API routes (routes/api.php) — no CSRF, prefixed /api
+$router->get('/users', [UserController::class, 'index'])->name('api.users');
+
+// Webhook — opt out of CSRF individually
+$router->post('/webhook/github', [WebhookController::class, 'handle'])->withoutCsrf();
 ```
 
 Route params are injected into controller methods by name.
+
+---
 
 ## Controllers
 
@@ -63,16 +100,25 @@ namespace App\Controllers;
 use Spark\Http\Request;
 use Spark\Http\Response;
 
-class HomeController
+class UserController
 {
-    public function index(Request $request): Response
+    public function show(Request $request, string $id): Response
     {
-        return view('home', ['title' => 'Hello']);
+        $user = User::find($id);
+        return json($user);
+    }
+
+    public function store(Request $request): Response
+    {
+        $user = User::create($request->only(['name', 'email']));
+        return json($user, 201);
     }
 }
 ```
 
 Return a `Response`, an array/object (auto-JSON), or a string (HTML).
+
+---
 
 ## Models (ORM)
 
@@ -84,18 +130,21 @@ use Spark\Database\Model;
 class User extends Model
 {
     protected static array $fillable = ['name', 'email'];
+    protected static bool  $timestamps = true;
 }
 
-// Usage
-$user = User::create(['name' => 'Ada', 'email' => 'ada@x.com']);
-$all  = User::all();
-$one  = User::find(1);
+// CRUD
+$user   = User::create(['name' => 'Ada', 'email' => 'ada@x.com']);
+$all    = User::all();
+$one    = User::find(1);
 $adults = User::where('age', '>', 18)->orderBy('name')->limit(10)->get();
 $user->update(['name' => 'Ada Lovelace']);
 $user->delete();
 ```
 
 Relationships: `hasOne`, `hasMany`, `belongsTo`.
+
+---
 
 ## Migrations
 
@@ -118,17 +167,20 @@ return new class extends Migration {
 };
 ```
 
-Run: `php spark migrate` / `php spark migrate:rollback`.
+Supports SQLite, MySQL, and PostgreSQL.
 
-## Blade-lite Views
+```bash
+vendor/bin/spark migrate
+vendor/bin/spark migrate:rollback
+```
 
-`resources/views/home.spark.php`:
+---
+
+## Blade-lite Views (`.spark.php`)
 
 ```blade
 @extends('layout')
-
 @section('title', 'Home')
-
 @section('content')
   <h1>{{ $title }}</h1>
   @foreach($items as $item)
@@ -140,9 +192,12 @@ Run: `php spark migrate` / `php spark migrate:rollback`.
 @endsection
 ```
 
-Compiled once to plain PHP in `storage/cache/views/` — fast on subsequent hits.
+Templates compile once to plain PHP in `storage/cache/views/`. Subsequent requests use the cached version.
 
-Directives: `@extends @section @endsection @yield @include @if @elseif @else @endif @foreach @endforeach @for @while @isset @empty @unless @php @endphp`. Echo: `{{ }}` (escaped) and `{!! !!}` (raw).
+Directives: `@extends @section @endsection @yield @include @if @elseif @else @endif @foreach @endforeach @for @while @isset @empty @unless @php @endphp`  
+Echo: `{{ $var }}` (HTML-escaped), `{!! $html !!}` (raw)
+
+---
 
 ## Middleware
 
@@ -165,58 +220,98 @@ class Auth
 }
 ```
 
-Attach per-route or per-group via `->middleware(Auth::class)`.
+Built-in: `StartSession`, `VerifyCsrfToken`, `Cors`, `ForceHttps`.
+
+---
+
+## Service Providers
+
+```php
+namespace App\Providers;
+
+use Spark\Support\ServiceProvider;
+
+class AppServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        $this->app->singleton(PaymentGateway::class, fn() => new StripeGateway(
+            config('services.stripe.key')
+        ));
+    }
+
+    public function boot(): void
+    {
+        // Runs after all providers are registered
+    }
+}
+```
+
+Register in `bootstrap/app.php`:
+
+```php
+$app->register(\App\Providers\AppServiceProvider::class);
+```
+
+---
 
 ## Dependency Injection
 
-Constructor-inject any class; the container auto-resolves:
+Constructor-inject any class; the container resolves dependencies automatically:
 
 ```php
 class ReportController
 {
-    public function __construct(private UserRepo $repo) {}
+    public function __construct(private UserRepository $repo) {}
 
-    public function index(): Response {
+    public function index(): Response
+    {
         return json($this->repo->all());
     }
 }
 ```
 
-Register custom bindings in `bootstrap/app.php`:
+---
 
-```php
-app()->singleton(UserRepo::class, fn($c) => new EloquentUserRepo($c->make(Connection::class)));
+## CLI
+
+```bash
+vendor/bin/spark serve                   # dev server (localhost:8000)
+vendor/bin/spark make:controller Foo     # scaffold controller
+vendor/bin/spark make:model Foo
+vendor/bin/spark make:middleware Foo
+vendor/bin/spark make:migration create_foo_table
+vendor/bin/spark migrate
+vendor/bin/spark migrate:rollback
+vendor/bin/spark route:list
+vendor/bin/spark key:generate
 ```
 
-## CLI (Spark)
+---
 
-```
-php spark serve                     # dev server
-php spark make:controller Foo       # scaffold controller
-php spark make:model Foo
-php spark make:middleware Foo
-php spark make:migration create_foo_table
-php spark migrate
-php spark migrate:rollback
-php spark route:list
-php spark key:generate
-```
+## Security defaults
+
+Every response gets these headers automatically:
+
+| Header | Value |
+|--------|-------|
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `SAMEORIGIN` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Content-Security-Policy` | strict + nonce for inline scripts/styles |
+| `Strict-Transport-Security` | set on HTTPS |
+| `Permissions-Policy` | `geolocation=(), microphone=(), camera=()` |
+
+CSRF tokens, secure session cookies, SQL prepared statements, mass-assignment protection, and open-redirect prevention are all on by default.
+
+---
 
 ## Helpers
 
-`app()`, `config('key')`, `env('KEY')`, `base_path()`, `storage_path()`, `view()`, `json()`, `response()`, `redirect()`, `abort()`, `dd()`.
+`app()`, `config()`, `env()`, `base_path()`, `storage_path()`, `view()`, `json()`, `response()`, `redirect()`, `abort()`, `csrf_token()`, `csrf_field()`, `bcrypt()`, `csp_nonce()`, `e()`, `dd()`
 
-## Performance Notes
-
-- Pure PHP, no Symfony / Illuminate.
-- Container resolves on demand (no eager boot).
-- Views compile once to plain PHP.
-- Routes match via compiled regex.
-
-## What Spark Removes vs Laravel
-
-No queues, broadcasting, notifications, mail, events, facades, policies, service providers, package discovery, polymorphic relations, casts/accessors/mutators, or Symfony components. Just routing, ORM, views, middleware, DI, CLI, migrations.
+---
 
 ## License
 
-MIT
+[MIT](LICENSE) — Copyright (c) 2026 Pawan More

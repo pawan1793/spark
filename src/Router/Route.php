@@ -22,13 +22,21 @@ class Route
     {
         $uri = '/' . trim($this->uri, '/');
         $names = [];
-        $pattern = preg_replace_callback('/\{(\w+)(\?)?\}/', function ($m) use (&$names) {
+
+        // Optional params: consume the preceding slash so /users/{id?}
+        // matches both /users and /users/42, not /users//42.
+        $pattern = preg_replace_callback('/\/\{(\w+)\?\}/', function ($m) use (&$names) {
             $names[] = $m[1];
-            return isset($m[2]) ? '(?:/([^/]+))?' : '([^/]+)';
+            return '(?:/([^/]+))?';
         }, $uri);
 
-        $pattern = '#^' . $pattern . '$#';
-        $this->regex = $pattern;
+        // Required params.
+        $pattern = preg_replace_callback('/\{(\w+)\}/', function ($m) use (&$names) {
+            $names[] = $m[1];
+            return '([^/]+)';
+        }, $pattern);
+
+        $this->regex = '#^' . $pattern . '$#';
         $this->paramNames = $names;
     }
 

@@ -1,0 +1,26 @@
+{
+    "name": "spark/skeleton",
+    "description": "The Spark application skeleton — start a new Spark project with composer create-project spark/skeleton",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": "^8.1",
+        "spark/framework": "^1.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    },
+    "scripts": {
+        "post-create-project-cmd": [
+            "@php vendor/bin/spark key:generate"
+        ]
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
