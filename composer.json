@@ -1,5 +1,5 @@
 {
-    "name": "spark/framework",
+    "name": "spark-php/framework",
     "description": "Spark — a lightweight, Laravel-inspired PHP framework with routing, ORM, templating, and CLI",
     "type": "library",
     "license": "MIT",

@@ -1,8 +1,8 @@
 # Spark
 
 [![Tests](https://github.com/pawan1793/spark/actions/workflows/tests.yml/badge.svg)](https://github.com/pawan1793/spark/actions/workflows/tests.yml)
-[![Latest Version](https://img.shields.io/packagist/v/spark/framework.svg)](https://packagist.org/packages/spark/framework)
-[![PHP Version](https://img.shields.io/packagist/php-v/spark/framework.svg)](https://packagist.org/packages/spark/framework)
+[![Latest Version](https://img.shields.io/packagist/v/spark-php/framework.svg)](https://packagist.org/packages/spark-php/framework)
+[![PHP Version](https://img.shields.io/packagist/php-v/spark-php/framework.svg)](https://packagist.org/packages/spark-php/framework)
 [![License](https://img.shields.io/github/license/pawan1793/spark.svg)](LICENSE)
 
 A lightweight, Laravel-inspired PHP framework. No Symfony dependencies, no heavy abstractions — just routing, ORM, templating, middleware, DI, migrations, and a CLI in clean PHP 8.1+ code.
@@ -23,7 +23,7 @@ vendor/bin/spark serve
 ### Add to existing project
 
 ```bash
-composer require spark/framework
+composer require spark-php/framework
 ```
 
 ```php
