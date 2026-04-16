@@ -128,7 +128,17 @@ class Response
         if (!isset($this->headers['Content-Security-Policy'])
             && isset($this->headers['Content-Type'])
             && str_starts_with($this->headers['Content-Type'], 'text/html')) {
-            $this->headers['Content-Security-Policy'] = "default-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'";
+            $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
+            $nonceSrc = $nonce !== '' ? " 'nonce-$nonce'" : '';
+            $this->headers['Content-Security-Policy'] =
+                "default-src 'self'; "
+                . "script-src 'self'$nonceSrc; "
+                . "style-src 'self'$nonceSrc; "
+                . "img-src 'self' data:; "
+                . "font-src 'self' data:; "
+                . "object-src 'none'; "
+                . "base-uri 'self'; "
+                . "frame-ancestors 'self'";
         }
     }
 

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>@yield('title', 'Spark')</title>
-  <style>
+  <style nonce="{{ csp_nonce() }}">
     :root { color-scheme: light dark; }
     * { box-sizing: border-box; }
     body {
@@ -21,6 +21,7 @@
     li { background: rgba(255,255,255,.06); padding: .75rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,.1); }
     footer { margin-top: 3rem; opacity: .5; font-size: .85rem; }
     code { background: rgba(255,255,255,.1); padding: .15rem .4rem; border-radius: 4px; }
+    .mt-2 { margin-top: 2rem; }
   </style>
 </head>
 <body>

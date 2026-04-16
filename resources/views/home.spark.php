@@ -12,7 +12,7 @@
     @endforeach
   </ul>
 
-  <p style="margin-top:2rem">
+  <p class="mt-2">
     Try <code>GET /ping</code> or <code>GET /hello/world</code> or <code>GET /api/users</code>.
   </p>
 @endsection
