@@ -1,0 +1,11 @@
+/vendor/
+/node_modules/
+/storage/logs/*.log
+/storage/cache/views/*
+/storage/database.sqlite
+.env
+.DS_Store
+.idea/
+.vscode/
+.claude/
+PRD.md
