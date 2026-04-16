@@ -94,6 +94,10 @@ class Router
 
     protected function runWithMiddleware(Route $route, Request $request, array $params): Response
     {
+        if ($route->csrfExempt) {
+            $request->setAttribute('_csrf_exempt', true);
+        }
+
         $handler = new MiddlewareHandler($this->app, $route->middleware, function (Request $req) use ($route, $params) {
             return $this->runAction($route->action, $req, $params);
         });

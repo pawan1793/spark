@@ -6,6 +6,7 @@ class Route
 {
     public array $middleware = [];
     public ?string $name = null;
+    public bool $csrfExempt = false;
     protected string $regex;
     protected array $paramNames = [];
 
@@ -57,6 +58,12 @@ class Route
     public function name(string $name): self
     {
         $this->name = $name;
+        return $this;
+    }
+
+    public function withoutCsrf(): self
+    {
+        $this->csrfExempt = true;
         return $this;
     }
 }
