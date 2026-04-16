@@ -8,6 +8,7 @@ class Schema
 {
     public static function create(string $table, \Closure $callback): void
     {
+        QueryBuilder::assertIdentifier($table, 'table');
         $conn = self::conn();
         $blueprint = new Blueprint($table, $conn->driver());
         $callback($blueprint);
@@ -20,7 +21,8 @@ class Schema
 
     public static function drop(string $table): void
     {
-        self::conn()->statement("DROP TABLE IF EXISTS $table");
+        QueryBuilder::assertIdentifier($table, 'table');
+        self::conn()->statement("DROP TABLE IF EXISTS `$table`");
     }
 
     public static function dropIfExists(string $table): void
@@ -30,6 +32,7 @@ class Schema
 
     public static function hasTable(string $table): bool
     {
+        QueryBuilder::assertIdentifier($table, 'table');
         $conn = self::conn();
         if ($conn->driver() === 'sqlite') {
             $row = $conn->selectOne("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", [$table]);

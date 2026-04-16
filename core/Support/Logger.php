@@ -17,7 +17,7 @@ class Logger
     ) {
         $dir = dirname($this->path);
         if (!is_dir($dir)) {
-            @mkdir($dir, 0775, true);
+            @mkdir($dir, 0770, true);
         }
     }
 
@@ -33,8 +33,11 @@ class Logger
         }
 
         $time = date('Y-m-d H:i:s');
-        $ctx = $context ? ' ' . json_encode($context) : '';
-        $line = "[$time] " . strtoupper($level) . ": $message$ctx" . PHP_EOL;
+        // Strip CR/LF so attacker-supplied data can't forge log lines.
+        $safeMessage = str_replace(["\r", "\n"], ' ', $message);
+        $ctx = $context ? ' ' . json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : '';
+        $line = "[$time] " . strtoupper($level) . ": $safeMessage$ctx" . PHP_EOL;
         @file_put_contents($this->path, $line, FILE_APPEND | LOCK_EX);
+        @chmod($this->path, 0640);
     }
 }

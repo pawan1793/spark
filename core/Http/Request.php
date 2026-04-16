@@ -60,11 +60,34 @@ class Request
         return $scheme . '://' . $host . ($this->server['REQUEST_URI'] ?? '/');
     }
 
+    /**
+     * Resolve the client IP. By default only REMOTE_ADDR is used — the
+     * X-Forwarded-For header is attacker-controllable when the app isn't
+     * fronted by a trusted proxy. Configure app.trusted_proxies to enable
+     * X-Forwarded-For / X-Real-IP parsing when running behind a load
+     * balancer.
+     */
     public function ip(): string
     {
-        return $this->server['HTTP_X_FORWARDED_FOR']
-            ?? $this->server['REMOTE_ADDR']
-            ?? '0.0.0.0';
+        $remote = $this->server['REMOTE_ADDR'] ?? '0.0.0.0';
+        $proxies = null;
+        if (function_exists('config')) {
+            $proxies = config('app.trusted_proxies');
+        }
+        if (!is_array($proxies) || empty($proxies)) {
+            return $remote;
+        }
+        if (!in_array($remote, $proxies, true) && !in_array('*', $proxies, true)) {
+            return $remote;
+        }
+        $forwarded = $this->server['HTTP_X_FORWARDED_FOR']
+            ?? $this->server['HTTP_X_REAL_IP']
+            ?? null;
+        if (!$forwarded) {
+            return $remote;
+        }
+        $candidate = trim(explode(',', (string) $forwarded)[0]);
+        return filter_var($candidate, FILTER_VALIDATE_IP) ?: $remote;
     }
 
     public function header(string $name, ?string $default = null): ?string

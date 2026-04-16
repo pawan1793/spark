@@ -8,7 +8,10 @@ abstract class Model
 {
     protected static string $table = '';
     protected static string $primaryKey = 'id';
+    /** Attributes that may be mass-assigned via fill() / create() / update(). */
     protected static array $fillable = [];
+    /** Attributes that must never be mass-assigned even if they appear in $fillable. */
+    protected static array $guarded = ['id', 'created_at', 'updated_at'];
     protected static bool $timestamps = true;
 
     protected array $attributes = [];
@@ -20,14 +23,34 @@ abstract class Model
         $this->fill($attributes);
     }
 
+    /**
+     * Mass-assign attributes. Attributes are only accepted if they appear in
+     * static::$fillable AND not in static::$guarded. An empty $fillable means
+     * "no mass assignment allowed" — this is a deliberate whitelist default
+     * that prevents privilege-escalation bugs (e.g. setting is_admin via a
+     * JSON body). Use setAttribute() to assign values from trusted code.
+     */
     public function fill(array $attributes): static
     {
         $fillable = static::$fillable;
+        if (empty($fillable)) {
+            return $this;
+        }
+        $guarded = static::$guarded;
         foreach ($attributes as $key => $value) {
-            if (!$fillable || in_array($key, $fillable, true)) {
+            if (in_array($key, $fillable, true) && !in_array($key, $guarded, true)) {
                 $this->attributes[$key] = $value;
             }
         }
+        return $this;
+    }
+
+    /**
+     * Set an attribute from trusted code, bypassing mass-assignment rules.
+     */
+    public function setAttribute(string $key, mixed $value): static
+    {
+        $this->attributes[$key] = $value;
         return $this;
     }
 

@@ -53,21 +53,50 @@ class ErrorHandler
         $wantsJson = (isset($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json'))
             || (isset($_SERVER['CONTENT_TYPE']) && str_contains($_SERVER['CONTENT_TYPE'], 'application/json'));
 
+        if (!headers_sent()) {
+            // Apply minimal security headers even on error pages so an
+            // exception page can't be framed / MIME-sniffed into an attack.
+            header('X-Content-Type-Options: nosniff');
+            header('X-Frame-Options: SAMEORIGIN');
+            header('Referrer-Policy: strict-origin-when-cross-origin');
+        }
+
         if ($wantsJson) {
-            header('Content-Type: application/json');
-            echo json_encode([
-                'error' => self::$debug ? get_class($e) : 'Error',
-                'message' => $e instanceof \Spark\Http\HttpException || self::$debug
-                    ? $e->getMessage()
-                    : 'Internal Server Error',
+            if (!headers_sent()) {
+                header('Content-Type: application/json; charset=UTF-8');
+            }
+            $payload = [
                 'status' => $status,
-                'file' => self::$debug ? $e->getFile() : null,
-                'line' => self::$debug ? $e->getLine() : null,
-            ]);
+                'message' => $e instanceof \Spark\Http\HttpException
+                    ? $e->getMessage()
+                    : (self::$debug ? $e->getMessage() : self::genericMessage($status)),
+            ];
+            if (self::$debug) {
+                $payload['error'] = get_class($e);
+                $payload['file'] = $e->getFile();
+                $payload['line'] = $e->getLine();
+                $payload['trace'] = explode("\n", $e->getTraceAsString());
+            }
+            echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
             return;
         }
 
         echo self::renderHtml($e, $status);
+    }
+
+    protected static function genericMessage(int $status): string
+    {
+        return match ($status) {
+            400 => 'Bad Request',
+            401 => 'Unauthorized',
+            403 => 'Forbidden',
+            404 => 'Not Found',
+            405 => 'Method Not Allowed',
+            419 => 'Page Expired',
+            422 => 'Unprocessable Entity',
+            429 => 'Too Many Requests',
+            default => 'Internal Server Error',
+        };
     }
 
     public static function handleShutdown(): void
@@ -98,8 +127,12 @@ class ErrorHandler
     protected static function renderHtml(Throwable $e, int $status = 500): string
     {
         if (!self::$debug) {
-            $label = $e instanceof \Spark\Http\HttpException ? $e->getMessage() : 'Something went wrong.';
-            return "<!doctype html><html><head><title>$status</title><style>body{font-family:system-ui;padding:4rem;text-align:center;color:#444}h1{font-size:4rem;margin:0}</style></head><body><h1>$status</h1><p>$label</p></body></html>";
+            $label = $e instanceof \Spark\Http\HttpException
+                ? $e->getMessage()
+                : self::genericMessage($status);
+            $label = htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $statusSafe = (int) $status;
+            return "<!doctype html><html><head><title>$statusSafe</title><style>body{font-family:system-ui;padding:4rem;text-align:center;color:#444}h1{font-size:4rem;margin:0}</style></head><body><h1>$statusSafe</h1><p>$label</p></body></html>";
         }
 
         $class = htmlspecialchars(get_class($e));

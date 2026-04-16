@@ -2,6 +2,8 @@
 
 namespace Spark\Database;
 
+use InvalidArgumentException;
+
 class QueryBuilder
 {
     protected string $table;
@@ -17,7 +19,7 @@ class QueryBuilder
     public function __construct(Connection $connection, string $table)
     {
         $this->connection = $connection;
-        $this->table = $table;
+        $this->table = self::assertIdentifier($table, 'table');
     }
 
     public function setModel(string $modelClass): self
@@ -28,7 +30,13 @@ class QueryBuilder
 
     public function select(string|array $columns): self
     {
-        $this->columns = is_array($columns) ? $columns : [$columns];
+        $cols = is_array($columns) ? $columns : [$columns];
+        foreach ($cols as $c) {
+            if ($c !== '*') {
+                self::assertIdentifier($c, 'column');
+            }
+        }
+        $this->columns = $cols;
         return $this;
     }
 
@@ -38,6 +46,9 @@ class QueryBuilder
             $value = $operator;
             $operator = '=';
         }
+        self::assertIdentifier($column, 'column');
+        $operator = self::assertOperator($operator);
+        $boolean = strtoupper($boolean) === 'OR' ? 'OR' : 'AND';
         $this->wheres[] = compact('column', 'operator', 'value', 'boolean');
         $this->bindings[] = $value;
         return $this;
@@ -54,6 +65,18 @@ class QueryBuilder
 
     public function whereIn(string $column, array $values): self
     {
+        self::assertIdentifier($column, 'column');
+        if (empty($values)) {
+            // WHERE col IN () is invalid; force a no-match clause
+            $this->wheres[] = [
+                'column' => '1',
+                'operator' => '=',
+                'value' => '0',
+                'boolean' => 'AND',
+                'raw' => true,
+            ];
+            return $this;
+        }
         $placeholders = implode(',', array_fill(0, count($values), '?'));
         $this->wheres[] = [
             'column' => $column,
@@ -70,25 +93,37 @@ class QueryBuilder
 
     public function orderBy(string $column, string $direction = 'ASC'): self
     {
-        $this->orders[] = "$column " . strtoupper($direction);
+        self::assertIdentifier($column, 'column');
+        $direction = strtoupper($direction);
+        if ($direction !== 'ASC' && $direction !== 'DESC') {
+            throw new InvalidArgumentException("Invalid order direction: $direction");
+        }
+        $this->orders[] = self::quote($column) . ' ' . $direction;
         return $this;
     }
 
     public function limit(int $n): self
     {
+        if ($n < 0) {
+            throw new InvalidArgumentException('LIMIT must be non-negative.');
+        }
         $this->limit = $n;
         return $this;
     }
 
     public function offset(int $n): self
     {
+        if ($n < 0) {
+            throw new InvalidArgumentException('OFFSET must be non-negative.');
+        }
         $this->offset = $n;
         return $this;
     }
 
     public function toSql(): string
     {
-        $sql = 'SELECT ' . implode(', ', $this->columns) . ' FROM ' . $this->table;
+        $cols = array_map(fn($c) => $c === '*' ? '*' : self::quote($c), $this->columns);
+        $sql = 'SELECT ' . implode(', ', $cols) . ' FROM ' . self::quote($this->table);
         $sql .= $this->buildWhere();
         if ($this->orders) {
             $sql .= ' ORDER BY ' . implode(', ', $this->orders);
@@ -107,9 +142,10 @@ class QueryBuilder
         if (!$this->wheres) return '';
         $parts = [];
         foreach ($this->wheres as $i => $w) {
+            $col = isset($w['raw']) && $w['column'] === '1' ? '1' : self::quote($w['column']);
             $clause = isset($w['raw'])
-                ? "{$w['column']} {$w['operator']} {$w['value']}"
-                : "{$w['column']} {$w['operator']} ?";
+                ? "{$col} {$w['operator']} {$w['value']}"
+                : "{$col} {$w['operator']} ?";
             if ($i === 0) {
                 $parts[] = $clause;
             } else {
@@ -142,7 +178,7 @@ class QueryBuilder
 
     public function count(): int
     {
-        $sql = 'SELECT COUNT(*) as c FROM ' . $this->table . $this->buildWhere();
+        $sql = 'SELECT COUNT(*) as c FROM ' . self::quote($this->table) . $this->buildWhere();
         $row = $this->connection->selectOne($sql, $this->bindings);
         return (int) ($row['c'] ?? 0);
     }
@@ -155,8 +191,13 @@ class QueryBuilder
     public function insert(array $data): string
     {
         $columns = array_keys($data);
+        foreach ($columns as $c) {
+            self::assertIdentifier($c, 'column');
+        }
+        $quotedCols = array_map(fn($c) => self::quote($c), $columns);
         $placeholders = implode(',', array_fill(0, count($columns), '?'));
-        $sql = 'INSERT INTO ' . $this->table . ' (' . implode(',', $columns) . ') VALUES (' . $placeholders . ')';
+        $sql = 'INSERT INTO ' . self::quote($this->table)
+            . ' (' . implode(',', $quotedCols) . ') VALUES (' . $placeholders . ')';
         return $this->connection->insert($sql, array_values($data));
     }
 
@@ -165,16 +206,54 @@ class QueryBuilder
         $set = [];
         $values = [];
         foreach ($data as $col => $val) {
-            $set[] = "$col = ?";
+            self::assertIdentifier($col, 'column');
+            $set[] = self::quote($col) . ' = ?';
             $values[] = $val;
         }
-        $sql = 'UPDATE ' . $this->table . ' SET ' . implode(', ', $set) . $this->buildWhere();
+        $sql = 'UPDATE ' . self::quote($this->table) . ' SET ' . implode(', ', $set) . $this->buildWhere();
         return $this->connection->affectingStatement($sql, array_merge($values, $this->bindings));
     }
 
     public function delete(): int
     {
-        $sql = 'DELETE FROM ' . $this->table . $this->buildWhere();
+        $sql = 'DELETE FROM ' . self::quote($this->table) . $this->buildWhere();
         return $this->connection->affectingStatement($sql, $this->bindings);
+    }
+
+    /**
+     * Validate that a string is a safe SQL identifier.
+     * Allows optional "table.column" form. Rejects anything with whitespace,
+     * quotes, semicolons, or other SQL metacharacters.
+     */
+    public static function assertIdentifier(string $identifier, string $kind = 'identifier'): string
+    {
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/', $identifier)) {
+            throw new InvalidArgumentException("Invalid $kind: " . $identifier);
+        }
+        return $identifier;
+    }
+
+    /**
+     * Wrap an identifier in backticks (works for MySQL/SQLite; PostgreSQL uses
+     * double quotes but treats backticks as strings — so we keep driver-agnostic
+     * behavior by only quoting when safe. With identifier validation above,
+     * quoting is primarily defense-in-depth against reserved words.)
+     */
+    protected static function quote(string $identifier): string
+    {
+        if (str_contains($identifier, '.')) {
+            return implode('.', array_map(fn($p) => '`' . $p . '`', explode('.', $identifier)));
+        }
+        return '`' . $identifier . '`';
+    }
+
+    protected static function assertOperator(string $operator): string
+    {
+        $allowed = ['=', '!=', '<>', '<', '>', '<=', '>=', 'LIKE', 'NOT LIKE', 'IN', 'NOT IN', 'IS', 'IS NOT'];
+        $up = strtoupper($operator);
+        if (!in_array($up, $allowed, true)) {
+            throw new InvalidArgumentException("Invalid SQL operator: $operator");
+        }
+        return $up === 'LIKE' || $up === 'NOT LIKE' || $up === 'IS' || $up === 'IS NOT' ? $up : $operator;
     }
 }

@@ -80,7 +80,8 @@ class Compiler
             '/@endempty\b/' => '<?php endif; ?>',
             '/@php\b/' => '<?php ',
             '/@endphp\b/' => ' ?>',
-            '/@csrf\b/' => '<?php echo \'<input type="hidden" name="_token" value="\' . ($_SESSION[\'_csrf\'] ?? \'\') . \'">\'; ?>',
+            '/@csrf\b/' => '<?php echo \'<input type="hidden" name="_token" value="\' . htmlspecialchars(\\Spark\\Http\\Session::csrfToken(), ENT_QUOTES | ENT_SUBSTITUTE, \'UTF-8\') . \'">\'; ?>',
+            '/@method\s*\(\s*[\'"]([A-Z]+)[\'"]\s*\)/' => '<?php echo \'<input type="hidden" name="_method" value="$1">\'; ?>',
         ];
 
         foreach ($patterns as $pattern => $replacement) {

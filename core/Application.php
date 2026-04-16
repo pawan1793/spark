@@ -96,13 +96,21 @@ class Application extends Container
         $webFile = $this->basePath . '/routes/web.php';
         $apiFile = $this->basePath . '/routes/api.php';
 
+        $webMiddleware = (array) $this->config('app.web_middleware', [
+            \Spark\Middleware\StartSession::class,
+            \Spark\Middleware\VerifyCsrfToken::class,
+        ]);
+        $apiMiddleware = (array) $this->config('app.api_middleware', []);
+
         if (is_file($webFile)) {
-            (function () use ($router, $webFile) {
-                require $webFile;
-            })();
+            $router->group(['middleware' => $webMiddleware], function ($router) use ($webFile) {
+                (function () use ($router, $webFile) {
+                    require $webFile;
+                })();
+            });
         }
         if (is_file($apiFile)) {
-            $router->group(['prefix' => 'api'], function ($router) use ($apiFile) {
+            $router->group(['prefix' => 'api', 'middleware' => $apiMiddleware], function ($router) use ($apiFile) {
                 (function () use ($router, $apiFile) {
                     require $apiFile;
                 })();
@@ -132,7 +140,9 @@ class Application extends Container
         ];
         foreach ($dirs as $dir) {
             if (!is_dir($dir)) {
-                @mkdir($dir, 0775, true);
+                // 0770 — writable by owner and group only. Web servers
+                // typically share a group, not global write access.
+                @mkdir($dir, 0770, true);
             }
         }
     }
