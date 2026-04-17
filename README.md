@@ -274,9 +274,52 @@ CSRF tokens, secure session cookies, SQL prepared statements, mass-assignment pr
 
 ---
 
+## Logging
+
+Spark includes a built-in file logger. Logs are written to `storage/logs/spark.log`.
+
+```php
+// Log at info level
+logger('User registered', ['user_id' => $user->id]);
+
+// Get the Logger instance for any level
+logger()->debug('Cache miss', ['key' => $cacheKey]);
+logger()->warning('Slow query detected', ['ms' => 850]);
+logger()->error('Payment failed', ['order' => $orderId]);
+```
+
+Log format:
+```
+[2026-04-17 10:30:00] INFO: User registered {"user_id":42}
+[2026-04-17 10:30:01] ERROR: Payment failed {"order":99}
+```
+
+The minimum log level is controlled by `LOG_LEVEL` in your `.env` file (default: `debug`).  
+Valid levels: `debug`, `info`, `warning`, `error`.
+
+You can also inject the logger via the container:
+
+```php
+use Spark\Support\Logger;
+
+class OrderController
+{
+    public function __construct(private Logger $logger) {}
+
+    public function store(Request $request): Response
+    {
+        // ...
+        $this->logger->info('Order created', ['id' => $order->id]);
+        return json($order, 201);
+    }
+}
+```
+
+---
+
 ## Helpers
 
-`app()`, `config()`, `env()`, `base_path()`, `storage_path()`, `view()`, `json()`, `response()`, `redirect()`, `abort()`, `csrf_token()`, `csrf_field()`, `bcrypt()`, `csp_nonce()`, `e()`, `dd()`
+`app()`, `config()`, `env()`, `base_path()`, `storage_path()`, `view()`, `json()`, `response()`, `redirect()`, `abort()`, `csrf_token()`, `csrf_field()`, `bcrypt()`, `csp_nonce()`, `e()`, `dd()`, `logger()`
 
 ---
 

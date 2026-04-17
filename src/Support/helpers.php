@@ -4,6 +4,7 @@ use Spark\Application;
 use Spark\Config\Env;
 use Spark\Http\Response;
 use Spark\Http\Session;
+use Spark\Support\Logger;
 use Spark\View\View;
 
 if (!function_exists('app')) {
@@ -141,6 +142,17 @@ if (!function_exists('bcrypt')) {
     function bcrypt(string $password, array $options = []): string
     {
         return password_hash($password, PASSWORD_DEFAULT, $options);
+    }
+}
+
+if (!function_exists('logger')) {
+    function logger(?string $message = null, array $context = []): Logger
+    {
+        $logger = app(Logger::class);
+        if ($message !== null) {
+            $logger->info($message, $context);
+        }
+        return $logger;
     }
 }
 
