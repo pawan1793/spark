@@ -13,8 +13,8 @@ class Compiler
         $template = $this->compileSections($template);
         $template = $this->compileYields($template);
         $template = $this->compileControlStructures($template);
-        $template = $this->compileEchos($template);
         $template = $this->compileNonces($template);
+        $template = $this->compileEchos($template);
         return $template;
     }
 
