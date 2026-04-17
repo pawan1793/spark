@@ -24,7 +24,7 @@
     "scripts": {
         "post-create-project-cmd": [
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
-            "@php vendor/bin/spark key:generate"
+            "@php spark key:generate"
         ]
     },
     "config": {
