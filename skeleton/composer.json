@@ -1,8 +1,17 @@
 {
-    "name": "spark/skeleton",
-    "description": "The Spark application skeleton — start a new Spark project with composer create-project spark/skeleton",
+    "name": "spark-php/skeleton",
+    "description": "The Spark application skeleton — start a new project with composer create-project spark-php/skeleton my-app",
     "type": "project",
     "license": "MIT",
+    "keywords": ["framework", "spark", "skeleton", "php", "mvc"],
+    "authors": [
+        {
+            "name": "Pawan More",
+            "email": "hello@pawanmore.com",
+            "role": "Developer"
+        }
+    ],
+    "homepage": "https://github.com/pawan1793/spark-skeleton",
     "require": {
         "php": "^8.1",
         "spark-php/framework": "^1.0"
@@ -14,6 +23,7 @@
     },
     "scripts": {
         "post-create-project-cmd": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
             "@php vendor/bin/spark key:generate"
         ]
     },

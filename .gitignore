@@ -9,4 +9,4 @@
 .vscode/
 .claude/
 PRD.md
-composer.lock
+composer.lock.phpunit.result.cache
