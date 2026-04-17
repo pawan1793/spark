@@ -128,8 +128,23 @@ class Response
         if (!isset($this->headers['Content-Security-Policy'])
             && isset($this->headers['Content-Type'])
             && str_starts_with($this->headers['Content-Type'], 'text/html')) {
-            $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
-            $nonceSrc = $nonce !== '' ? " 'nonce-$nonce'" : '';
+            $nonce    = function_exists('csp_nonce') ? csp_nonce() : '';
+            $hasNonce = $nonce !== '';
+            $nonceSrc = $hasNonce ? " 'nonce-$nonce'" : '';
+            $extra    = function_exists('config') ? (array) config('csp', []) : [];
+
+            // 'unsafe-inline' is silently ignored by browsers when a nonce is present (CSP spec §2.4.1)
+            if ($hasNonce) {
+                foreach (['script_src', 'style_src'] as $key) {
+                    if (isset($extra[$key])) {
+                        $extra[$key] = array_filter(
+                            (array) $extra[$key],
+                            fn($s) => strtolower(trim($s)) !== "'unsafe-inline'"
+                        );
+                    }
+                }
+            }
+
             $this->headers['Content-Security-Policy'] =
                 "default-src 'self'; "
                 . "script-src 'self'$nonceSrc; "

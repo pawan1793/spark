@@ -14,6 +14,7 @@ class Compiler
         $template = $this->compileYields($template);
         $template = $this->compileControlStructures($template);
         $template = $this->compileEchos($template);
+        $template = $this->compileNonces($template);
         return $template;
     }
 
@@ -61,32 +62,50 @@ class Compiler
 
     protected function compileControlStructures(string $t): string
     {
-        $patterns = [
-            '/@if\s*\((.+?)\)/' => '<?php if ($1): ?>',
-            '/@elseif\s*\((.+?)\)/' => '<?php elseif ($1): ?>',
-            '/@else\b/' => '<?php else: ?>',
-            '/@endif\b/' => '<?php endif; ?>',
-            '/@unless\s*\((.+?)\)/' => '<?php if (!($1)): ?>',
-            '/@endunless\b/' => '<?php endif; ?>',
-            '/@foreach\s*\((.+?)\)/' => '<?php foreach ($1): ?>',
-            '/@endforeach\b/' => '<?php endforeach; ?>',
-            '/@for\s*\((.+?)\)/' => '<?php for ($1): ?>',
-            '/@endfor\b/' => '<?php endfor; ?>',
-            '/@while\s*\((.+?)\)/' => '<?php while ($1): ?>',
-            '/@endwhile\b/' => '<?php endwhile; ?>',
-            '/@isset\s*\((.+?)\)/' => '<?php if (isset($1)): ?>',
-            '/@endisset\b/' => '<?php endif; ?>',
-            '/@empty\s*\((.+?)\)/' => '<?php if (empty($1)): ?>',
-            '/@endempty\b/' => '<?php endif; ?>',
-            '/@php\b/' => '<?php ',
-            '/@endphp\b/' => ' ?>',
-            '/@csrf\b/' => '<?php echo \'<input type="hidden" name="_token" value="\' . htmlspecialchars(\\Spark\\Http\\Session::csrfToken(), ENT_QUOTES | ENT_SUBSTITUTE, \'UTF-8\') . \'">\'; ?>',
-            '/@method\s*\(\s*[\'"]([A-Z]+)[\'"]\s*\)/' => '<?php echo \'<input type="hidden" name="_method" value="$1">\'; ?>',
-        ];
+        // Matches expressions with up to 2 levels of nested parentheses (e.g. isset(), count())
+        $e = '((?:[^()]+|\((?:[^()]+|\([^()]*\))*\))*)';
 
-        foreach ($patterns as $pattern => $replacement) {
-            $t = preg_replace($pattern, $replacement, $t);
-        }
+        $t = preg_replace('/@if\s*\('      . $e . '\)/', '<?php if ($1): ?>',        $t);
+        $t = preg_replace('/@elseif\s*\('  . $e . '\)/', '<?php elseif ($1): ?>',    $t);
+        $t = preg_replace('/@else\b/',                   '<?php else: ?>',           $t);
+        $t = preg_replace('/@endif\b/',                  '<?php endif; ?>',          $t);
+        $t = preg_replace('/@unless\s*\('  . $e . '\)/', '<?php if (!($1)): ?>',     $t);
+        $t = preg_replace('/@endunless\b/',               '<?php endif; ?>',         $t);
+        $t = preg_replace('/@foreach\s*\(' . $e . '\)/', '<?php foreach ($1): ?>',   $t);
+        $t = preg_replace('/@endforeach\b/',              '<?php endforeach; ?>',    $t);
+        $t = preg_replace('/@for\s*\('     . $e . '\)/', '<?php for ($1): ?>',       $t);
+        $t = preg_replace('/@endfor\b/',                  '<?php endfor; ?>',        $t);
+        $t = preg_replace('/@while\s*\('   . $e . '\)/', '<?php while ($1): ?>',     $t);
+        $t = preg_replace('/@endwhile\b/',                '<?php endwhile; ?>',      $t);
+        $t = preg_replace('/@isset\s*\('   . $e . '\)/', '<?php if (isset($1)): ?>', $t);
+        $t = preg_replace('/@endisset\b/',                '<?php endif; ?>',         $t);
+        $t = preg_replace('/@empty\s*\('   . $e . '\)/', '<?php if (empty($1)): ?>', $t);
+        $t = preg_replace('/@endempty\b/',                '<?php endif; ?>',         $t);
+        $t = preg_replace('/@php\b/',                    '<?php ',                   $t);
+        $t = preg_replace('/@endphp\b/',                  ' ?>',                    $t);
+        $t = preg_replace('/@csrf\b/',
+            '<?php echo \'<input type="hidden" name="_token" value="\' . htmlspecialchars(\\Spark\\Http\\Session::csrfToken(), ENT_QUOTES | ENT_SUBSTITUTE, \'UTF-8\') . \'">\'; ?>',
+            $t);
+        $t = preg_replace('/@method\s*\(\s*[\'"]([A-Z]+)[\'"]\s*\)/',
+            '<?php echo \'<input type="hidden" name="_method" value="$1">\'; ?>',
+            $t);
+        return $t;
+    }
+
+    protected function compileNonces(string $t): string
+    {
+        $nonce = '<?php echo htmlspecialchars(function_exists(\'csp_nonce\') ? csp_nonce() : \'\', ENT_QUOTES|ENT_SUBSTITUTE, \'UTF-8\'); ?>';
+
+        $t = preg_replace(
+            '/<style(?![^>]*\bnonce\b)([^>]*)>/i',
+            '<style$1 nonce="' . $nonce . '">',
+            $t
+        );
+        $t = preg_replace(
+            '/<script(?![^>]*\bnonce\b)([^>]*)>/i',
+            '<script$1 nonce="' . $nonce . '">',
+            $t
+        );
         return $t;
     }
 
