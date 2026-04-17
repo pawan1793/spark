@@ -131,25 +131,33 @@ class Response
             $nonce    = function_exists('csp_nonce') ? csp_nonce() : '';
             $hasNonce = $nonce !== '';
             $nonceSrc = $hasNonce ? " 'nonce-$nonce'" : '';
-            $extra    = function_exists('config') ? (array) config('csp', []) : [];
+
+            // Auto-detect external origins from the rendered HTML
+            $detected = $this->detectCspOrigins($this->content);
+
+            // Merge with optional config/csp.php overrides (config wins on conflicts)
+            $config = function_exists('config') ? (array) config('csp', []) : [];
+            $directives = ['script_src', 'style_src', 'img_src', 'font_src', 'connect_src', 'frame_ancestors', 'default_src'];
+            $merged = [];
+            foreach ($directives as $key) {
+                $merged[$key] = array_values(array_unique(array_merge(
+                    $detected[$key] ?? [],
+                    array_map('trim', (array) ($config[$key] ?? [])),
+                )));
+            }
 
             // 'unsafe-inline' is silently ignored by browsers when a nonce is present (CSP spec §2.4.1)
             if ($hasNonce) {
                 foreach (['script_src', 'style_src'] as $key) {
-                    if (isset($extra[$key])) {
-                        $extra[$key] = array_filter(
-                            (array) $extra[$key],
-                            fn($s) => strtolower(trim($s)) !== "'unsafe-inline'"
-                        );
-                    }
+                    $merged[$key] = array_values(array_filter(
+                        $merged[$key],
+                        fn($s) => strtolower($s) !== "'unsafe-inline'"
+                    ));
                 }
             }
 
-            $src = function (string $key) use ($extra): string {
-                if (empty($extra[$key])) {
-                    return '';
-                }
-                $parts = array_filter(array_map('trim', (array) $extra[$key]));
+            $src = function (string $key) use ($merged): string {
+                $parts = array_filter($merged[$key]);
                 return $parts ? ' ' . implode(' ', $parts) : '';
             };
 
@@ -164,6 +172,51 @@ class Response
                 . "base-uri 'self'; "
                 . "frame-ancestors 'self'" . $src('frame_ancestors');
         }
+    }
+
+    protected function detectCspOrigins(string $html): array
+    {
+        $origins = ['script_src' => [], 'style_src' => [], 'img_src' => [], 'font_src' => []];
+
+        // <script src="https://...">
+        preg_match_all('/<script[^>]+\bsrc=["\']?(https?:\/\/[^"\'>\s]+)/i', $html, $m);
+        foreach ($m[1] as $url) {
+            if ($o = $this->urlOrigin($url)) $origins['script_src'][] = $o;
+        }
+
+        // <img src="..."> and <source src="...">
+        preg_match_all('/<(?:img|source)[^>]+\bsrc=["\']?(https?:\/\/[^"\'>\s]+)/i', $html, $m);
+        foreach ($m[1] as $url) {
+            if ($o = $this->urlOrigin($url)) $origins['img_src'][] = $o;
+        }
+
+        // <link> — map rel/as to the right directive
+        preg_match_all('/<link([^>]+)>/i', $html, $links);
+        foreach ($links[1] as $attrs) {
+            if (!preg_match('/\bhref=["\']?(https?:\/\/[^"\'>\s]+)/i', $attrs, $href)) continue;
+            $rel = '';
+            if (preg_match('/\brel=["\']([^"\']+)["\']/i', $attrs, $rm)) $rel = strtolower(trim($rm[1]));
+            $as  = '';
+            if (preg_match('/\bas=["\']([^"\']+)["\']/i',  $attrs, $am)) $as  = strtolower(trim($am[1]));
+
+            if ($rel === 'stylesheet') {
+                if ($o = $this->urlOrigin($href[1])) $origins['style_src'][] = $o;
+            } elseif ($rel === 'preload' && $as === 'font') {
+                if ($o = $this->urlOrigin($href[1])) $origins['font_src'][] = $o;
+            } elseif (in_array($rel, ['icon', 'shortcut icon', 'apple-touch-icon'])) {
+                if ($o = $this->urlOrigin($href[1])) $origins['img_src'][] = $o;
+            }
+        }
+
+        return array_map(fn($list) => array_values(array_unique($list)), $origins);
+    }
+
+    private function urlOrigin(string $url): string
+    {
+        $p = parse_url($url);
+        return ($p && !empty($p['scheme']) && !empty($p['host']))
+            ? $p['scheme'] . '://' . $p['host']
+            : '';
     }
 
     /**
