@@ -145,15 +145,24 @@ class Response
                 }
             }
 
+            $src = function (string $key) use ($extra): string {
+                if (empty($extra[$key])) {
+                    return '';
+                }
+                $parts = array_filter(array_map('trim', (array) $extra[$key]));
+                return $parts ? ' ' . implode(' ', $parts) : '';
+            };
+
             $this->headers['Content-Security-Policy'] =
-                "default-src 'self'; "
-                . "script-src 'self'$nonceSrc; "
-                . "style-src 'self'$nonceSrc; "
-                . "img-src 'self' data:; "
-                . "font-src 'self' data:; "
+                "default-src 'self'" . $src('default_src') . "; "
+                . "script-src 'self'$nonceSrc" . $src('script_src') . "; "
+                . "style-src 'self'$nonceSrc" . $src('style_src') . "; "
+                . "img-src 'self' data:" . $src('img_src') . "; "
+                . "font-src 'self' data:" . $src('font_src') . "; "
+                . "connect-src 'self'" . $src('connect_src') . "; "
                 . "object-src 'none'; "
                 . "base-uri 'self'; "
-                . "frame-ancestors 'self'";
+                . "frame-ancestors 'self'" . $src('frame_ancestors');
         }
     }
 
