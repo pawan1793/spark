@@ -176,7 +176,7 @@ class Response
 
     protected function detectCspOrigins(string $html): array
     {
-        $origins = ['script_src' => [], 'style_src' => [], 'img_src' => [], 'font_src' => []];
+        $origins = ['script_src' => [], 'style_src' => [], 'img_src' => [], 'font_src' => [], 'connect_src' => []];
 
         // <script src="https://...">
         preg_match_all('/<script[^>]+\bsrc=["\']?(https?:\/\/[^"\'>\s]+)/i', $html, $m);
@@ -207,6 +207,13 @@ class Response
                 if ($o = $this->urlOrigin($href[1])) $origins['img_src'][] = $o;
             }
         }
+
+        // Browsers fetch .map source files from the same CDN hosts — allow them in connect-src
+        $origins['connect_src'] = array_values(array_unique(array_merge(
+            $origins['connect_src'],
+            $origins['script_src'],
+            $origins['style_src'],
+        )));
 
         return array_map(fn($list) => array_values(array_unique($list)), $origins);
     }
