@@ -156,15 +156,26 @@ class Response
                 }
             }
 
+            // Inline style="..." attributes need 'unsafe-hashes' + per-value SHA-256 hashes.
+            // Nonces and 'unsafe-inline' do not cover style attributes.
+            $inlineStyleHashes = array_values(array_unique(array_merge(
+                $detected['inline_style_hashes'] ?? [],
+                array_map('trim', (array) ($config['inline_style_hashes'] ?? [])),
+            )));
+
             $src = function (string $key) use ($merged): string {
                 $parts = array_filter($merged[$key]);
                 return $parts ? ' ' . implode(' ', $parts) : '';
             };
 
+            $styleInlineDirective = $inlineStyleHashes
+                ? " 'unsafe-hashes' " . implode(' ', $inlineStyleHashes)
+                : '';
+
             $this->headers['Content-Security-Policy'] =
                 "default-src 'self'" . $src('default_src') . "; "
                 . "script-src 'self'$nonceSrc" . $src('script_src') . "; "
-                . "style-src 'self'$nonceSrc" . $src('style_src') . "; "
+                . "style-src 'self'$nonceSrc" . $src('style_src') . $styleInlineDirective . "; "
                 . "img-src 'self' data:" . $src('img_src') . "; "
                 . "font-src 'self' data:" . $src('font_src') . "; "
                 . "connect-src 'self'" . $src('connect_src') . "; "
@@ -176,7 +187,7 @@ class Response
 
     protected function detectCspOrigins(string $html): array
     {
-        $origins = ['script_src' => [], 'style_src' => [], 'img_src' => [], 'font_src' => [], 'connect_src' => []];
+        $origins = ['script_src' => [], 'style_src' => [], 'img_src' => [], 'font_src' => [], 'connect_src' => [], 'inline_style_hashes' => []];
 
         // <script src="https://...">
         preg_match_all('/<script[^>]+\bsrc=["\']?(https?:\/\/[^"\'>\s]+)/i', $html, $m);
@@ -214,6 +225,15 @@ class Response
             $origins['script_src'],
             $origins['style_src'],
         )));
+
+        // Inline style="..." attributes — collect SHA-256 hashes for 'unsafe-hashes' support.
+        // Strip PHP echo tags before hashing so we hash the literal CSS text, not the PHP source.
+        $stripped = preg_replace('/<\?php.*?\?>/s', '', $html);
+        preg_match_all('/\bstyle=["\']([^"\']+)["\']/i', $stripped, $m);
+        foreach ($m[1] as $styleValue) {
+            $hash = base64_encode(hash('sha256', $styleValue, true));
+            $origins['inline_style_hashes'][] = "'sha256-$hash'";
+        }
 
         return array_map(fn($list) => array_values(array_unique($list)), $origins);
     }
