@@ -69,6 +69,11 @@ class Route
         return $this;
     }
 
+    public function getRegex(): string
+    {
+        return $this->regex;
+    }
+
     public function withoutCsrf(): self
     {
         $this->csrfExempt = true;

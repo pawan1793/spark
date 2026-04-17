@@ -72,8 +72,7 @@ class Router
                 return $this->runWithMiddleware($route, $request, $params);
             }
             // Track 405
-            $tmpParams = [];
-            if (preg_match($this->getRegex($route), $path)) {
+            if (preg_match($route->getRegex(), $path)) {
                 $methodAllowed = true;
             }
         }
@@ -82,14 +81,6 @@ class Router
             throw new HttpException(405);
         }
         throw new HttpException(404, "Route [$method $path] not found.");
-    }
-
-    protected function getRegex(Route $route): string
-    {
-        $ref = new \ReflectionClass($route);
-        $prop = $ref->getProperty('regex');
-        $prop->setAccessible(true);
-        return $prop->getValue($route);
     }
 
     protected function runWithMiddleware(Route $route, Request $request, array $params): Response

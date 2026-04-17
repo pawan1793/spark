@@ -16,7 +16,10 @@ class Application extends Container
 {
     public readonly string $basePath;
     protected array $config = [];
+    /** @var array<string,string> section => file path, indexed but not yet loaded */
+    protected array $configFiles = [];
     protected static ?Application $app = null;
+    protected static bool $dirsEnsured = false;
     /** @var ServiceProvider[] */
     protected array $providers = [];
 
@@ -46,7 +49,6 @@ class Application extends Container
 
         $this->instance(self::class, $this);
         $this->instance('app', $this);
-        $this->instance('config', $this->config);
 
         $this->singleton(Logger::class, fn() => new Logger(
             $this->basePath . '/storage/logs/spark.log',
@@ -85,14 +87,19 @@ class Application extends Container
             return;
         }
         foreach (glob($dir . '/*.php') as $file) {
-            $key = basename($file, '.php');
-            $this->config[$key] = require $file;
+            $this->configFiles[basename($file, '.php')] = $file;
         }
     }
 
     public function config(string $key, mixed $default = null): mixed
     {
         $parts = explode('.', $key);
+        $section = $parts[0];
+
+        if (!array_key_exists($section, $this->config) && isset($this->configFiles[$section])) {
+            $this->config[$section] = require $this->configFiles[$section];
+        }
+
         $value = $this->config;
         foreach ($parts as $part) {
             if (!is_array($value) || !array_key_exists($part, $value)) {
@@ -105,6 +112,11 @@ class Application extends Container
 
     public function configAll(): array
     {
+        foreach ($this->configFiles as $section => $file) {
+            if (!array_key_exists($section, $this->config)) {
+                $this->config[$section] = require $file;
+            }
+        }
         return $this->config;
     }
 
@@ -152,6 +164,10 @@ class Application extends Container
 
     protected function ensureStorageDirs(): void
     {
+        if (self::$dirsEnsured) {
+            return;
+        }
+        self::$dirsEnsured = true;
         $dirs = [
             $this->basePath . '/storage/logs',
             $this->basePath . '/storage/cache/views',

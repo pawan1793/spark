@@ -13,6 +13,9 @@ class Container
     protected array $instances = [];
     protected static ?Container $instance = null;
 
+    /** @var array<string, array<int,array{name:string,className:string|null,hasDefault:bool,default:mixed}>|null> */
+    private static array $buildCache = [];
+
     public static function getInstance(): self
     {
         return self::$instance ??= new self();
@@ -72,39 +75,52 @@ class Container
             throw new RuntimeException("Class [$class] does not exist.");
         }
 
-        $reflector = new ReflectionClass($class);
-        if (!$reflector->isInstantiable()) {
-            throw new RuntimeException("Class [$class] is not instantiable.");
+        if (!array_key_exists($class, self::$buildCache)) {
+            $reflector = new ReflectionClass($class);
+            if (!$reflector->isInstantiable()) {
+                throw new RuntimeException("Class [$class] is not instantiable.");
+            }
+            $constructor = $reflector->getConstructor();
+            if (!$constructor) {
+                self::$buildCache[$class] = null;
+            } else {
+                $specs = [];
+                foreach ($constructor->getParameters() as $param) {
+                    $type = $param->getType();
+                    $specs[] = [
+                        'name'       => $param->getName(),
+                        'className'  => ($type instanceof ReflectionNamedType && !$type->isBuiltin()) ? $type->getName() : null,
+                        'hasDefault' => $param->isDefaultValueAvailable(),
+                        'default'    => $param->isDefaultValueAvailable() ? $param->getDefaultValue() : null,
+                    ];
+                }
+                self::$buildCache[$class] = $specs;
+            }
         }
 
-        $constructor = $reflector->getConstructor();
-        if (!$constructor) {
+        $specs = self::$buildCache[$class];
+        if ($specs === null) {
             return new $class();
         }
 
         $args = [];
-        foreach ($constructor->getParameters() as $param) {
-            $name = $param->getName();
-            if (array_key_exists($name, $parameters)) {
-                $args[] = $parameters[$name];
+        foreach ($specs as $spec) {
+            if (array_key_exists($spec['name'], $parameters)) {
+                $args[] = $parameters[$spec['name']];
                 continue;
             }
-
-            $type = $param->getType();
-            if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
-                $args[] = $this->make($type->getName());
+            if ($spec['className'] !== null) {
+                $args[] = $this->make($spec['className']);
                 continue;
             }
-
-            if ($param->isDefaultValueAvailable()) {
-                $args[] = $param->getDefaultValue();
+            if ($spec['hasDefault']) {
+                $args[] = $spec['default'];
                 continue;
             }
-
-            throw new RuntimeException("Cannot resolve parameter \${$name} for [$class].");
+            throw new RuntimeException("Cannot resolve parameter \${$spec['name']} for [$class].");
         }
 
-        return $reflector->newInstanceArgs($args);
+        return new $class(...$args);
     }
 
     public function call(callable|array $callback, array $parameters = []): mixed
