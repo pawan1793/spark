@@ -9,32 +9,115 @@ A lightweight, Laravel-inspired PHP framework. No Symfony dependencies, no heavy
 
 ---
 
-## Installation
+## Quick Start
 
-### New project (recommended)
-
-```bash
-composer create-project spark/skeleton my-app
-cd my-app
-vendor/bin/spark key:generate
-vendor/bin/spark serve
-```
-
-### Add to existing project
+**1. Install**
 
 ```bash
+mkdir my-app && cd my-app
 composer require spark-php/framework
 ```
 
+**2. Create the project structure**
+
+```
+my-app/
+├── app/
+│   ├── Controllers/
+│   ├── Middleware/
+│   └── Models/
+├── bootstrap/
+│   └── autoload.php
+├── config/
+│   ├── app.php
+│   └── database.php
+├── database/
+│   └── migrations/
+├── public/
+│   └── index.php
+├── resources/
+│   └── views/
+├── routes/
+│   ├── web.php
+│   └── api.php
+└── storage/
+    ├── logs/
+    └── cache/views/
+```
+
+**3. Bootstrap files**
+
+`bootstrap/autoload.php`:
 ```php
-// public/index.php
+<?php
+require __DIR__ . '/../vendor/autoload.php';
+```
+
+`public/index.php`:
+```php
+<?php
 use Spark\Application;
 
-require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../bootstrap/autoload.php';
 
 $app = new Application(dirname(__DIR__));
 $app->run();
 ```
+
+`config/app.php`:
+```php
+<?php
+return [
+    'name'  => env('APP_NAME', 'Spark'),
+    'env'   => env('APP_ENV', 'production'),
+    'debug' => filter_var(env('APP_DEBUG', false), FILTER_VALIDATE_BOOLEAN),
+    'url'   => env('APP_URL', 'http://localhost'),
+    'key'   => env('APP_KEY'),
+    'web_middleware' => [
+        \Spark\Middleware\StartSession::class,
+        \Spark\Middleware\VerifyCsrfToken::class,
+    ],
+    'api_middleware' => [],
+    'trusted_proxies' => [],
+];
+```
+
+`config/database.php`:
+```php
+<?php
+return [
+    'default' => env('DB_CONNECTION', 'sqlite'),
+    'connections' => [
+        'sqlite' => ['database' => env('DB_DATABASE', 'storage/database.sqlite')],
+        'mysql'  => [
+            'host' => env('DB_HOST', '127.0.0.1'), 'port' => env('DB_PORT', 3306),
+            'database' => env('DB_DATABASE', ''), 'username' => env('DB_USERNAME', 'root'),
+            'password' => env('DB_PASSWORD', ''), 'charset' => 'utf8mb4',
+        ],
+    ],
+];
+```
+
+`.env`:
+```
+APP_NAME=Spark
+APP_ENV=local
+APP_DEBUG=true
+APP_URL=http://localhost:8000
+APP_KEY=
+
+DB_CONNECTION=sqlite
+DB_DATABASE=storage/database.sqlite
+```
+
+**4. Generate app key and start**
+
+```bash
+vendor/bin/spark key:generate
+vendor/bin/spark serve
+```
+
+Open [http://localhost:8000](http://localhost:8000).
 
 ---
 
@@ -43,23 +126,6 @@ $app->run();
 - PHP 8.1+
 - Extensions: `pdo`, `mbstring`, `json`
 - No other dependencies
-
----
-
-## Directory Layout
-
-```
-app/          Controllers, models, middleware (your code)
-bootstrap/    Autoloader + app registration
-config/       app.php + database.php
-database/     Migrations
-public/       Web entry point (index.php)
-resources/    Views (.spark.php)
-routes/       web.php + api.php
-src/          Framework internals (Spark\*)
-storage/      Logs + compiled view cache
-bin/spark     CLI entry point
-```
 
 ---
 
